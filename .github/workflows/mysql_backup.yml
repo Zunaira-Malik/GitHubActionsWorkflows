@@ -20,7 +20,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y mysql-server
-          sudo service mysql start
+          sudo mkdir -p /var/run/mysqld
+          sudo chown mysql:mysql /var/run/mysqld
           sudo service mysql stop
           # Start MySQL in skip-grant-tables mode to bypass root password
           sudo mysqld_safe --skip-grant-tables & sleep 5
