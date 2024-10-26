@@ -1,0 +1,50 @@
+name: MySQL Backup and Upload to S3
+
+on:
+  # Allows manually triggering the workflow from the GitHub Actions interface
+  workflow_dispatch:
+  
+  # Scheduled to run daily at 8 PM PKT (UTC+5)
+  schedule:
+    - cron: '0 15 * * *' # 8 PM PKT time in UTC (15:00 UTC)
+
+jobs:
+  mysql_backup_job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Set up MySQL Server
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-server
+          sudo service mysql start
+          # Set MySQL root password and create a database and user for backup
+          sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'rootpassword'; FLUSH PRIVILEGES;"
+          sudo mysql -e "CREATE DATABASE my_database;"
+          sudo mysql -e "CREATE USER 'backup_user'@'localhost' IDENTIFIED BY 'backup_password';"
+          sudo mysql -e "GRANT ALL PRIVILEGES ON my_database.* TO 'backup_user'@'localhost'; FLUSH PRIVILEGES;"
+
+      - name: Backup MySQL Database
+        env:
+          MYSQL_USER: 'backup_user' # Username created
+          MYSQL_PASSWORD: 'backup_password' # Password for the user
+          MYSQL_DATABASE: 'my_database' # Database to back up
+        run: |
+          TIMESTAMP=$(date +'%Y%m%d%H%M%S')
+          BACKUP_FILE="backup_$TIMESTAMP.sql"
+          mysqldump -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" > $BACKUP_FILE
+          echo "Database backup saved as $BACKUP_FILE"
+
+      - name: Upload Backup to S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: 'us-east-1'
+          S3_BUCKET_NAME: 'zun069'
+        run: |
+          TIMESTAMP=$(date +'%Y%m%d%H%M%S')
+          BACKUP_FILE="backup_$TIMESTAMP.sql"
+          aws s3 cp "$BACKUP_FILE" "s3://$S3_BUCKET_NAME/$BACKUP_FILE"
