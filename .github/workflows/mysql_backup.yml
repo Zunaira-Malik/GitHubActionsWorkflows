@@ -21,8 +21,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mysql-server
           sudo service mysql start
-          # Temporarily allow passwordless root access for setup
+          sudo service mysql stop
+          # Start MySQL in skip-grant-tables mode to bypass root password
+          sudo mysqld_safe --skip-grant-tables & sleep 5
+          # Set the root password
           sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'rootpassword'; FLUSH PRIVILEGES;"
+          # Stop the server and start it normally
+          sudo service mysql stop
+          sudo service mysql start
           # Create database and user for backups
           sudo mysql -u root -p'rootpassword' -e "CREATE DATABASE my_database;"
           sudo mysql -u root -p'rootpassword' -e "CREATE USER 'backup_user'@'localhost' IDENTIFIED BY 'backup_password';"
