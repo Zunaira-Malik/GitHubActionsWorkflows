@@ -25,6 +25,8 @@ jobs:
           sudo service mysql stop
           # Start MySQL in skip-grant-tables mode to bypass root password
           sudo mysqld_safe --skip-grant-tables & sleep 5
+          # Refresh privileges to switch back from skip-grant-tables mode
+          sudo mysql -e "FLUSH PRIVILEGES;"
           # Set the root password
           sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'rootpassword'; FLUSH PRIVILEGES;"
           # Stop the server and start it normally
