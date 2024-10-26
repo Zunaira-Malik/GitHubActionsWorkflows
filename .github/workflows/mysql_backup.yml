@@ -1,60 +1,57 @@
-name: MySQL Backup and Upload to S3
+name: MySQL Backup to S3
 
 on:
-  # Allows manually triggering the workflow from the GitHub Actions interface
   workflow_dispatch:
-  
-  # Scheduled to run daily at 8 PM PKT (UTC+5)
   schedule:
-    - cron: '0 15 * * *' # 8 PM PKT time in UTC (15:00 UTC)
+    - cron: '0 0 * * *'  # This will run the workflow daily at midnight. Adjust as needed.
 
 jobs:
-  mysql_backup_job:
+  mysql_backup:
     runs-on: ubuntu-latest
 
+    services:
+      mysql:
+        image: mysql:latest
+        env:
+          MYSQL_ROOT_PASSWORD: root_password
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up MySQL Server
+      - name: Wait for MySQL to be ready
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mysql-server
-          sudo mkdir -p /var/run/mysqld
-          sudo chown mysql:mysql /var/run/mysqld
-          sudo service mysql stop
-          # Start MySQL in skip-grant-tables mode to bypass root password
-          sudo mysqld_safe --skip-grant-tables & sleep 5
-          # Refresh privileges to switch back from skip-grant-tables mode
-          sudo mysql -e "FLUSH PRIVILEGES;"
-          # Set the root password
-          sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'rootpassword'; FLUSH PRIVILEGES;"
-          # Stop the server and start it normally
-          sudo service mysql stop
-          sudo service mysql start
-          # Create database and user for backups
-          sudo mysql -u root -p'rootpassword' -e "CREATE DATABASE my_database;"
-          sudo mysql -u root -p'rootpassword' -e "CREATE USER 'backup_user'@'localhost' IDENTIFIED BY 'backup_password';"
-          sudo mysql -u root -p'rootpassword' -e "GRANT ALL PRIVILEGES ON my_database.* TO 'backup_user'@'localhost'; FLUSH PRIVILEGES;"
+          until mysqladmin ping -h "localhost" --silent; do
+            echo "Waiting for MySQL to be ready..."
+            sleep 2
+          done
+
+      - name: Create MySQL Database
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -u root -p root_password -e "CREATE DATABASE zuns;"
 
       - name: Backup MySQL Database
-        env:
-          MYSQL_USER: 'backup_user' # Username created
-          MYSQL_PASSWORD: 'backup_password' # Password for the user
-          MYSQL_DATABASE: 'my_database' # Database to back up
         run: |
-          TIMESTAMP=$(date +'%Y%m%d%H%M%S')
-          BACKUP_FILE="backup_$TIMESTAMP.sql"
-          mysqldump -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" > $BACKUP_FILE
-          echo "Database backup saved as $BACKUP_FILE"
+          mysqldump -h 127.0.0.1 -P 3306 -u root -p root_password zuns > zuns_backup.sql
 
-      - name: Upload Backup to S3
+      - name: Install AWS CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y awscli
+
+      - name: Configure AWS CLI
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: 'us-east-1'
-          S3_BUCKET_NAME: 'zun069'
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
         run: |
-          TIMESTAMP=$(date +'%Y%m%d%H%M%S')
-          BACKUP_FILE="backup_$TIMESTAMP.sql"
-          aws s3 cp "$BACKUP_FILE" "s3://$S3_BUCKET_NAME/$BACKUP_FILE"
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+          aws configure set region $AWS_DEFAULT_REGION
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp zuns_backup.sql s3://zun069/zuns_backup.sql
