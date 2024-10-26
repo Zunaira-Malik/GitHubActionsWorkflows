@@ -3,39 +3,36 @@ name: MySQL Backup to S3
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'  # This will run the workflow daily at midnight. Adjust as needed.
+    - cron: '0 0 * * *'  # Runs daily at midnight; adjust as needed.
 
 jobs:
   mysql_backup:
     runs-on: ubuntu-latest
 
-    services:
-      mysql:
-        image: mysql:latest
-        env:
-          MYSQL_ROOT_PASSWORD: root_password
-        ports:
-          - 3306:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Wait for MySQL to be ready
+      - name: Install MySQL
         run: |
-          until mysqladmin ping -h "localhost" --silent; do
-            echo "Waiting for MySQL to be ready..."
-            sleep 2
-          done
+          sudo apt-get update
+          sudo apt-get install -y mysql-server
+          sudo service mysql start
+
+      - name: Configure MySQL Root User
+        env:
+          MYSQL_ROOT_PASSWORD: root_password
+        run: |
+          sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH 'mysql_native_password' BY '$MYSQL_ROOT_PASSWORD';"
+          sudo mysql -e "FLUSH PRIVILEGES;"
 
       - name: Create MySQL Database
         run: |
-          mysql -h 127.0.0.1 -P 3306 -u root -p root_password -e "CREATE DATABASE zuns;"
+          mysql -u root -p root_password -e "CREATE DATABASE zuns;"
 
       - name: Backup MySQL Database
         run: |
-          mysqldump -h 127.0.0.1 -P 3306 -u root -p root_password zuns > zuns_backup.sql
+          mysqldump -u root -p root_password zuns > zuns_backup.sql
 
       - name: Install AWS CLI
         run: |
