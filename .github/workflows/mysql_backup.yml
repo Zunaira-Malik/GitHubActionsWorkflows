@@ -2,8 +2,8 @@ name: MySQL Backup to S3
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * *'  # Runs daily at midnight; adjust as needed.
+  #schedule:
+   # - cron: '0 0 * * *'  # Runs daily at midnight; adjust as needed.
 
 jobs:
   mysql_backup:
