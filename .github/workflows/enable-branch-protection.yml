@@ -1,0 +1,61 @@
+name: Enable Branch Protection on New Repos
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check_new_repos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+
+      - name: Install GitHub CLI
+        run: |
+          sudo apt update
+          sudo apt install -y gh
+          echo "${{ secrets.PAT_TOKEN }}" | gh auth login --with-token
+
+      - name: Get Repos Created in Last 24 Hours
+        id: get_repos
+        run: |
+          # Calculate the date 24 hours ago in ISO 8601 format
+          since_date=$(date -u -d "24 hours ago" +"%Y-%m-%dT%H:%M:%SZ")
+         
+          # Fetch repositories created in the last 24 hours
+          repos=$(gh api orgs/Zunaira-Malik/repos --jq "[.[] | select(.created_at > \"$since_date\") | .name]")
+         
+          # Check if any repositories were found
+          if [[ "$repos" == "[]" ]]; then
+            echo "No new repositories found in the last 24 hours."
+            exit 0
+          fi
+         
+          echo "Repositories created in the last 24 hours: $repos"
+          echo "repos=${repos}" >> $GITHUB_ENV
+         
+      - name: Enable Branch Protection
+        if: ${{ env.repos != '[]' }}
+        run: |
+          # Convert the JSON array to a bash array
+          repos_array=$(echo "${repos}" | jq -r '.[]')
+         
+          for repo in ${repos_array}; do
+            echo "Enabling branch protection for repository: $repo"
+           
+            # Get the default branch name for each repository
+            default_branch=$(gh api -H "Authorization: token ${{ secrets.PAT_TOKEN }}" /repos/Zunaira-Malik/$repo --jq '.default_branch')
+           
+            # Enable branch protection on the default branch
+            gh api -X PUT -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+              /repos/Zunaira-Malik/$repo/branches/$default_branch/protection \
+              -F required_status_checks=null \
+              -F enforce_admins=true \
+              -F required_pull_request_reviews[dismiss_stale_reviews]=true \
+              -F required_pull_request_reviews[required_approving_review_count]=1 \
+              -F restrictions=null
+          done
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
