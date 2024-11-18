@@ -25,7 +25,7 @@ jobs:
           since_date=$(date -u -d "24 hours ago" +"%Y-%m-%dT%H:%M:%SZ")
          
           # Fetch repositories created in the last 24 hours
-          repos=$(gh api users/Zunaira-Malik/repos --jq "[.[] | select(.created_at > \"$since_date\") | .name]")
+          repos=$(gh api users/Zunaira-Malik/repos --paginate --jq "[.[] | select(.created_at > \"$since_date\") | .name]")
          
           # Check if any repositories were found
           if [[ "$repos" == "[]" ]]; then
