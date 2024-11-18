@@ -32,7 +32,7 @@ jobs:
             echo "No new repositories found in the last 24 hours."
           else
             echo "Repositories created in the last 24 hours: $repos"
-            echo "$repos" | jq -r '.[]' > $GITHUB_ENV
+            echo "$repos" | jq -r '.[]' > env.txt
           fi
          
       - name: Enable Branch Protection
