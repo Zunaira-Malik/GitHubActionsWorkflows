@@ -30,11 +30,10 @@ jobs:
           # Check if any repositories were found
           if [[ "$repos" == "[]" ]]; then
             echo "No new repositories found in the last 24 hours."
-            exit 0
+          else
+            echo "Repositories created in the last 24 hours: $repos"
+            echo "${repos}" | jq -r '.[]' > $GITHUB_ENV
           fi
-         
-          echo "Repositories created in the last 24 hours: $repos"
-          echo "repos=${repos}" >> $GITHUB_ENV
          
       - name: Enable Branch Protection
         if: ${{ env.repos != '[]' }}
